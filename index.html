@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Silver Star Distillery — Sales Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #e07b39;
+  --primary-light: #f4a96a;
+  --primary-pale: #fdf0e6;
+  --green: #3ab87a;
+  --green-light: #d4f5e5;
+  --red: #e05252;
+  --red-light: #fde8e8;
+  --blue: #3a7bd5;
+  --blue-light: #e8f0fd;
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --surface2: #f5f2ee;
+  --border: #ede8e0;
+  --text: #2c2416;
+  --text-muted: #8a7d6b;
+  --shadow: 0 2px 16px rgba(44,36,22,0.08);
+  --shadow-lg: 0 8px 40px rgba(44,36,22,0.12);
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { font-size: 16px; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+/* ========== NAV ========== */
+.nav {
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  position: sticky; top: 0; z-index: 200;
+  box-shadow: 0 2px 12px rgba(44,36,22,0.06);
+}
+.nav-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.nav-logo {
+  width: 36px; height: 36px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Playfair Display', serif;
+  font-size: 13px; color: white; font-weight: 700;
+}
+.nav-title { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--text); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-subtitle { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; display: none; }
+@media(min-width:600px){ .nav-subtitle { display: block; } .nav { padding: 0 24px; height: 60px; } .nav-logo { width: 40px; height: 40px; font-size: 15px; } .nav-title { font-size: 18px; } }
+
+.nav-tabs { display: flex; gap: 4px; flex-shrink: 0; }
+.nav-tab {
+  padding: 7px 14px; border-radius: 8px;
+  border: none; background: none; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+  color: var(--text-muted); transition: all 0.2s; white-space: nowrap;
+}
+.nav-tab.active { background: var(--primary); color: white; }
+.nav-tab:hover:not(.active) { background: var(--surface2); color: var(--text); }
+
+/* ========== PANELS ========== */
+.panel { display: none; padding: 16px; max-width: 1400px; margin: 0 auto; padding-bottom: 80px; }
+.panel.active { display: block; }
+@media(min-width:768px){ .panel { padding: 24px 28px; padding-bottom: 40px; } }
+@media(min-width:1200px){ .panel { padding: 28px 32px; } }
+
+/* ========== BUTTONS ========== */
+.btn {
+  padding: 9px 16px; border-radius: var(--radius-sm); border: none;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; touch-action: manipulation;
+  min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:active { background: #c96a28; }
+.btn-outline { background: none; border: 1.5px solid var(--border); color: var(--text); }
+.btn-outline:active { border-color: var(--primary); color: var(--primary); }
+.btn-success { background: var(--green); color: white; }
+.btn-success:active { background: #2ea066; }
+.btn-danger { background: #fde8e8; color: var(--red); border: 1.5px solid #f5c2c2; }
+.btn-danger:active { background: var(--red); color: white; }
+.btn-excel { background: #1d6f42; color: white; }
+.btn-excel:active { background: #155230; }
+.btn-full { width: 100%; padding: 14px; font-size: 15px; border-radius: 10px; min-height: 50px; }
+
+/* ========== FILTERS ========== */
+.filter-select {
+  padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text); font-family: 'DM Sans', sans-serif;
+  font-size: 13px; cursor: pointer; outline: none; min-height: 40px;
+}
+.filter-select:focus { border-color: var(--primary); }
+
+/* ========== DASHBOARD HEADER ========== */
+.dash-header { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.dash-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text); }
+.dash-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media(min-width:600px){ .dash-header { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 20px; } .dash-title { font-size: 26px; } }
+
+/* ========== STATS GRID ========== */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+@media(min-width:480px){ .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+@media(min-width:900px){ .stats-grid { grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; } }
+.stat-card {
+  background: var(--surface); border-radius: var(--radius); padding: 14px;
+  border: 1.5px solid var(--border); box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+@media(min-width:600px){ .stat-card { padding: 18px; } }
+.stat-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light));
+}
+.stat-card.green::before { background: linear-gradient(90deg, var(--green), #6ddaa4); }
+.stat-card.gold::before { background: linear-gradient(90deg, #f0a500, #f7c840); }
+.stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; margin-bottom: 6px; }
+@media(min-width:600px){ .stat-label { font-size: 11px; } }
+.stat-value { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--text); font-weight: 700; line-height: 1; }
+@media(min-width:600px){ .stat-value { font-size: 28px; } }
+.stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+.stat-badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 600; margin-top: 4px; }
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-orange { background: var(--primary-pale); color: var(--primary); }
+.badge-gold { background: #fff8e1; color: #b8860b; }
+
+/* ========== TOP 5 PRODUCTS ========== */
+.top5-card {
+  background: var(--surface); border-radius: var(--radius); padding: 16px;
+  border: 1.5px solid var(--border); box-shadow: var(--shadow); margin-bottom: 16px;
+}
+@media(min-width:600px){ .top5-card { padding: 20px; margin-bottom: 20px; } }
+.top5-title { font-family: 'Playfair Display', serif; font-size: 16px; margin-bottom: 4px; }
+.top5-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+.top5-list { display: flex; flex-direction: column; gap: 8px; }
+.top5-item { display: flex; align-items: center; gap: 10px; }
+.top5-rank {
+  width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.rank-1 { background: #fff8c5; color: #b8860b; }
+.rank-2 { background: #f0f0f0; color: #555; }
+.rank-3 { background: #fde8d8; color: #a0522d; }
+.rank-4, .rank-5 { background: var(--surface2); color: var(--text-muted); }
+.top5-bar-wrap { flex: 1; }
+.top5-name { font-size: 12px; font-weight: 500; margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center; }
+.top5-brand-tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+.top5-bar-bg { background: var(--surface2); border-radius: 4px; height: 7px; overflow: hidden; }
+.top5-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.top5-qty { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* ========== CHARTS ========== */
+.charts-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 16px; }
+@media(min-width:768px){ .charts-grid { grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 20px; } }
+.chart-card {
+  background: var(--surface); border-radius: var(--radius); padding: 16px;
+  border: 1.5px solid var(--border); box-shadow: var(--shadow);
+}
+@media(min-width:600px){ .chart-card { padding: 20px; } }
+.chart-title { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--text); margin-bottom: 3px; }
+.chart-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+.chart-wrap { position: relative; height: 220px; }
+@media(min-width:600px){ .chart-wrap { height: 260px; } }
+
+/* ========== COMPARISON ========== */
+.compare-section { margin-bottom: 16px; }
+@media(min-width:600px){ .compare-section { margin-bottom: 20px; } }
+.compare-header { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+@media(min-width:600px){ .compare-header { flex-direction: row; align-items: center; justify-content: space-between; } }
+.compare-title { font-family: 'Playfair Display', serif; font-size: 17px; }
+.compare-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.compare-controls .btn { font-size: 12px; padding: 6px 12px; min-height: 34px; }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media(min-width:480px){ .compare-grid { grid-template-columns: repeat(3, 1fr); } }
+@media(min-width:768px){ .compare-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; } }
+@media(min-width:1100px){ .compare-grid { grid-template-columns: repeat(5, 1fr); } }
+.product-card {
+  background: var(--surface); border-radius: var(--radius-sm); padding: 12px;
+  border: 1.5px solid var(--border); cursor: pointer; transition: all 0.15s;
+  -webkit-user-select: none; user-select: none;
+}
+@media(min-width:600px){ .product-card { padding: 16px; border-radius: var(--radius); } }
+.product-card:active { transform: scale(0.97); }
+.product-card.selected { border-color: var(--primary); background: var(--primary-pale); }
+.product-card.competitor { border-left: 3px solid var(--green); }
+.product-card.competitor.selected { background: var(--green-light); border-color: var(--green); }
+.pc-brand { font-size: 9px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 4px; }
+.pc-brand.own { color: var(--primary); }
+.pc-brand.comp { color: var(--green); }
+.pc-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px; line-height: 1.3; }
+@media(min-width:600px){ .pc-name { font-size: 13px; } }
+.pc-total { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--text); }
+@media(min-width:600px){ .pc-total { font-size: 22px; } }
+.pc-unit { font-size: 10px; color: var(--text-muted); }
+
+.full-chart-card {
+  background: var(--surface); border-radius: var(--radius); padding: 16px;
+  border: 1.5px solid var(--border); box-shadow: var(--shadow); margin-bottom: 16px;
+}
+@media(min-width:600px){ .full-chart-card { padding: 20px; margin-bottom: 20px; } }
+.full-chart-wrap { position: relative; height: 260px; }
+@media(min-width:600px){ .full-chart-wrap { height: 320px; } }
+
+/* ========== DETAIL TABLE DASHBOARD ========== */
+.table-card {
+  background: var(--surface); border-radius: var(--radius); padding: 16px;
+  border: 1.5px solid var(--border); box-shadow: var(--shadow); margin-bottom: 20px;
+}
+@media(min-width:600px){ .table-card { padding: 20px; } }
+.table-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Pivot table for dashboard detail report */
+.pivot-table { border-collapse: collapse; white-space: nowrap; font-size: 12px; min-width: 700px; width: 100%; }
+.pivot-table th {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted);
+  font-weight: 600; padding: 8px 10px; text-align: center; border: 1px solid var(--border);
+  background: var(--surface2); white-space: normal; word-break: break-word; min-width: 70px; line-height: 1.2;
+}
+.pivot-table th.date-col { min-width: 75px; background: #fff8f2; color: var(--primary); font-weight: 700; text-align: left; position: sticky; left: 0; z-index: 2; }
+.pivot-table th.own-col { background: #fff3ea; color: var(--primary); border-top: 2px solid var(--primary); }
+.pivot-table th.comp-col { background: #edfaf4; color: var(--green); border-top: 2px solid var(--green); }
+.pivot-table td {
+  padding: 7px 10px; border: 1px solid var(--border); text-align: center; font-size: 12px; color: var(--text);
+}
+.pivot-table td.date-cell { text-align: left; font-weight: 600; font-size: 11px; background: #fff8f2; position: sticky; left: 0; z-index: 1; }
+.pivot-table td.own-data { background: #fffaf6; }
+.pivot-table td.comp-data { background: #f5fdf8; }
+.pivot-table td.zero { color: #ccc; }
+.pivot-table tr:hover td { filter: brightness(0.97); }
+.pivot-table tfoot td { font-weight: 700; background: var(--surface2); border-top: 2px solid var(--border); }
+.pivot-table tfoot td.own-total { background: #fff3ea; color: var(--primary); }
+.pivot-table tfoot td.comp-total { background: #edfaf4; color: var(--green); }
+.section-header-row th { background: var(--surface2) !important; font-size: 11px; color: var(--text); text-transform: none; letter-spacing: 0; font-weight: 600; text-align: left; padding: 6px 10px; }
+
+/* ========== ADMIN LOGIN ========== */
+.login-wrap {
+  min-height: calc(100vh - 56px); display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--primary-pale) 0%, #fff5f0 50%, var(--bg) 100%);
+  padding: 20px 16px;
+}
+.login-card {
+  background: var(--surface); border-radius: 20px; padding: 32px 24px;
+  box-shadow: var(--shadow-lg); border: 1.5px solid var(--border); text-align: center; width: 100%; max-width: 380px;
+}
+@media(min-width:480px){ .login-card { padding: 44px 40px; } }
+.login-icon { width: 60px; height: 60px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 16px; }
+.login-title { font-family: 'Playfair Display', serif; font-size: 22px; margin-bottom: 6px; }
+.login-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 26px; }
+.form-group { margin-bottom: 16px; text-align: left; }
+.form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+.form-input {
+  width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); outline: none; background: var(--bg);
+  -webkit-appearance: none; appearance: none;
+}
+.form-input:focus { border-color: var(--primary); background: white; }
+.login-error { color: var(--red); font-size: 13px; margin-bottom: 12px; display: none; }
+
+/* ========== ADMIN PANEL ========== */
+.admin-wrap { display: none; }
+.admin-wrap.visible { display: block; }
+.admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+.admin-title { font-family: 'Playfair Display', serif; font-size: 22px; }
+@media(min-width:600px){ .admin-title { font-size: 26px; } }
+
+/* Date card */
+.entry-card {
+  background: var(--surface); border-radius: var(--radius); padding: 16px;
+  border: 1.5px solid var(--border); box-shadow: var(--shadow); margin-bottom: 16px;
+}
+@media(min-width:600px){ .entry-card { padding: 22px; } }
+.entry-card-title { font-family: 'Playfair Display', serif; font-size: 15px; margin-bottom: 4px; }
+.entry-card-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+.entry-card-title.own { color: var(--primary); }
+.entry-card-title.comp { color: var(--green); }
+
+.date-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 0; }
+.date-row .form-group { margin-bottom: 0; }
+
+.entry-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 16px; }
+@media(min-width:768px){ .entry-grid { grid-template-columns: 1fr 1fr; gap: 18px; } }
+
+.product-entry { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
+.product-entry:last-child { margin-bottom: 0; }
+.product-entry label { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.3; }
+.qty-input {
+  width: 80px; padding: 8px 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-family: 'DM Sans', sans-serif; font-size: 15px; text-align: center; outline: none;
+  -webkit-appearance: none; appearance: none; flex-shrink: 0;
+}
+.qty-input:focus { border-color: var(--primary); background: white; }
+
+.success-msg {
+  color: var(--green); font-size: 13px; font-weight: 600; display: none;
+  padding: 12px 16px; background: var(--green-light); border-radius: var(--radius-sm);
+  margin-top: 12px; text-align: center; border: 1.5px solid #a8e8c8;
+}
+
+/* ========== ADMIN PIVOT TABLE ========== */
+.records-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.del-btn { padding: 4px 10px; font-size: 11px; min-height: 28px; }
+
+/* ========== NO DATA ========== */
+.no-data { text-align: center; padding: 32px 16px; color: var(--text-muted); font-size: 14px; }
+
+/* ========== MOBILE BOTTOM NAV ========== */
+.mobile-bottom-nav {
+  display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1.5px solid var(--border);
+  z-index: 300; box-shadow: 0 -4px 20px rgba(44,36,22,0.1);
+}
+@media(min-width:768px){ .mobile-bottom-nav { display: none; } }
+.mbn-btn {
+  flex: 1; padding: 10px 0; border: none; background: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500;
+  color: var(--text-muted); touch-action: manipulation;
+}
+.mbn-btn.active { color: var(--primary); }
+.mbn-icon { font-size: 20px; line-height: 1; }
+
+/* ========== MISC ========== */
+.month-pill { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 600; background: var(--primary-pale); color: var(--primary); }
+.tag-own { background: var(--primary-pale); color: var(--primary); padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.tag-comp { background: var(--green-light); color: var(--green); padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.section-title { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--text); margin-bottom: 4px; }
+.section-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo">SSD</div>
+    <div>
+      <div class="nav-title">Silver Star Distillery</div>
+      <div class="nav-subtitle">Silvassa &amp; Dadra and Nagar Haveli</div>
+    </div>
+  </div>
+  <div class="nav-tabs" id="desktop-tabs">
+    <button class="nav-tab active" onclick="switchPanel('dashboard',this)">📊 Dashboard</button>
+    <button class="nav-tab" onclick="switchPanel('admin',this)">⚙️ Admin</button>
+  </div>
+</nav>
+
+<!-- Mobile Bottom Nav -->
+<div class="mobile-bottom-nav">
+  <button class="mbn-btn active" id="mbn-dashboard" onclick="switchPanel('dashboard',this,'mbn')">
+    <span class="mbn-icon">📊</span><span>Dashboard</span>
+  </button>
+  <button class="mbn-btn" id="mbn-admin" onclick="switchPanel('admin',this,'mbn')">
+    <span class="mbn-icon">⚙️</span><span>Admin</span>
+  </button>
+</div>
+
+<!-- ======== DASHBOARD PANEL ======== -->
+<div id="panel-dashboard" class="panel active">
+  <div class="dash-header">
+    <div>
+      <div class="dash-title">Sales Dashboard</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">Real-time sales performance overview</div>
+    </div>
+    <div class="dash-controls">
+      <select class="filter-select" id="dash-year" onchange="renderDashboard()">
+        <option value="2026">2026</option><option value="2025">2025</option>
+      </select>
+      <select class="filter-select" id="dash-month" onchange="renderDashboard()">
+        <option value="all">All Months</option>
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+      <button class="btn btn-excel" onclick="exportExcel()" title="Export to Excel">📥 Excel</button>
+    </div>
+  </div>
+
+  <!-- Stats — 5 cards: own total, comp total, top product, best day -->
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <!-- TOP 5 PRODUCTS -->
+  <div class="top5-card">
+    <div class="top5-title">🏆 Top 5 Products</div>
+    <div class="top5-sub">Highest selling products across all brands for selected period</div>
+    <div class="top5-list" id="top5-list"></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Monthly Sales Trend</div>
+      <div class="chart-subtitle">Own brand vs competitor volumes</div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Own Brand Mix</div>
+      <div class="chart-subtitle">Product share breakdown</div>
+      <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Comparison -->
+  <div class="compare-section">
+    <div class="compare-header">
+      <div>
+        <div class="compare-title">Product Comparison</div>
+        <div style="font-size:12px;color:var(--text-muted)">Tap products to compare</div>
+      </div>
+      <div class="compare-controls">
+        <button class="btn btn-outline" onclick="selectAll('own')">My Brand</button>
+        <button class="btn btn-outline" onclick="selectAll('comp')">Competitors</button>
+        <button class="btn btn-outline" onclick="clearSelection()">Clear</button>
+      </div>
+    </div>
+    <div class="compare-grid" id="compare-grid"></div>
+  </div>
+
+  <div class="full-chart-card" id="compare-chart-wrap" style="display:none">
+    <div class="chart-title" id="compare-chart-title">Comparison Chart</div>
+    <div class="chart-subtitle">Selected products performance</div>
+    <div class="full-chart-wrap"><canvas id="compareChart"></canvas></div>
+  </div>
+
+  <!-- Detailed Sales Report — Pivot Table like screenshot -->
+  <div class="table-card">
+    <div class="table-header-row">
+      <div>
+        <div class="section-title">Detailed Sales Report</div>
+        <div class="section-sub" style="margin-top:3px;">Date-wise product data — all brands</div>
+      </div>
+      <button class="btn btn-excel" onclick="exportExcel()">📥 Export Excel</button>
+    </div>
+    <div class="table-scroll">
+      <table class="pivot-table" id="pivot-table">
+        <thead id="pivot-thead"></thead>
+        <tbody id="pivot-tbody"></tbody>
+        <tfoot id="pivot-tfoot"></tfoot>
+      </table>
+    </div>
+    <div class="no-data" id="dash-no-data" style="display:none">No sales data for the selected period. Add data from Admin panel.</div>
+  </div>
+</div>
+
+<!-- ======== ADMIN PANEL ======== -->
+<div id="panel-admin" class="panel">
+
+  <!-- Login -->
+  <div class="login-wrap" id="admin-login">
+    <div class="login-card">
+      <div class="login-icon">🔐</div>
+      <div class="login-title">Admin Access</div>
+      <div class="login-sub">Enter password to manage sales data</div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="admin-password" placeholder="Enter password" onkeydown="if(event.key==='Enter') adminLogin()">
+      </div>
+      <div class="login-error" id="login-error">Incorrect password. Please try again.</div>
+      <button class="btn btn-primary btn-full" onclick="adminLogin()">Login to Admin</button>
+    </div>
+  </div>
+
+  <!-- Admin Content -->
+  <div class="admin-wrap" id="admin-content">
+    <div class="admin-header">
+      <div>
+        <div class="admin-title">Admin Panel</div>
+        <div style="font-size:12px;color:var(--text-muted)">Daily sales data entry</div>
+      </div>
+      <button class="btn btn-outline" onclick="adminLogout()">🚪 Logout</button>
+    </div>
+
+    <!-- Date Card -->
+    <div class="entry-card">
+      <div class="entry-card-title" style="margin-bottom:10px;">📅 Entry Date</div>
+      <div class="date-row">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="entry-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Month</label>
+          <select class="form-input" id="entry-month">
+            <option value="1">Jan</option><option value="2">Feb</option>
+            <option value="3">Mar</option><option value="4">Apr</option>
+            <option value="5">May</option><option value="6">Jun</option>
+            <option value="7">Jul</option><option value="8">Aug</option>
+            <option value="9">Sep</option><option value="10">Oct</option>
+            <option value="11">Nov</option><option value="12">Dec</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Year</label>
+          <select class="form-input" id="entry-year">
+            <option value="2026" selected>2026</option>
+            <option value="2025">2025</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Products Entry -->
+    <div class="entry-grid">
+      <div class="entry-card" style="margin-bottom:0;">
+        <div class="entry-card-title own">🏷️ John Martin Products</div>
+        <div class="entry-card-sub">Enter cases sold — your brand</div>
+        <div id="own-products-form"></div>
+      </div>
+      <div class="entry-card" style="margin-bottom:0;">
+        <div class="entry-card-title comp">🏁 Competitor Products</div>
+        <div class="entry-card-sub">Enter competitor market data</div>
+        <div id="comp-products-form"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-success btn-full" id="save-btn" onclick="saveEntry()">💾 Save Sales Entry</button>
+      <div class="success-msg" id="success-msg">✅ Entry saved! Form cleared for new entry.</div>
+    </div>
+
+    <!-- Saved Records — Pivot Table -->
+    <div class="table-card" style="margin-top:20px;">
+      <div class="records-header">
+        <div>
+          <div class="section-title">Saved Records</div>
+          <div class="section-sub" style="margin-top:3px;">All entries in pivot format</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select class="filter-select" id="admin-filter-month" onchange="renderAdminTable()">
+            <option value="all">All Months</option>
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+          <button class="btn btn-excel" onclick="exportAdminExcel()">📥 Excel</button>
+          <button class="btn btn-danger" onclick="clearAllData()">🗑️ Clear All</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="pivot-table" id="admin-pivot-table">
+          <thead id="admin-pivot-thead"></thead>
+          <tbody id="admin-pivot-tbody"></tbody>
+          <tfoot id="admin-pivot-tfoot"></tfoot>
+        </table>
+      </div>
+      <div class="no-data" id="admin-no-data" style="display:none">No records yet. Add entries above.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== SCRIPTS ======== -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ============================================================
+// FIREBASE CONFIG — Replace with your real keys
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyByZK5xvX7CzWxvu1FSWVc_HAac9ZkbcT0",
+  authDomain: "ssd1-aaea6.firebaseapp.com",
+  projectId: "ssd1-aaea6",
+  storageBucket: "ssd1-aaea6.firebasestorage.app",
+  messagingSenderId: "729339762528",
+  appId: "1:729339762528:web:52f415c3526ddedce5f005"
+};
+// ============================================================
+
+let db, useFirebase = false;
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  useFirebase = true;
+} catch(e) { useFirebase = false; }
+
+// ============================================================
+// DATA
+// ============================================================
+const OWN_PRODUCTS = [
+  { id: 'jm180',    name: 'John Martin 180 ML',          short: 'JM 180' },
+  { id: 'jm750pet', name: 'John Martin 750 ML Pet',      short: 'JM 750 Pet' },
+  { id: 'jm2lpet',  name: 'John Martin 2 L Pet',         short: 'JM 2L Pet' },
+  { id: 'sd180',    name: 'Silver Deluxe 180 ML',        short: 'Silver Dlx' },
+  { id: 'ss180',    name: 'Silver Special 180 ML',       short: 'Silver Spl' },
+  { id: 'jmsm750',  name: 'John Martin Secret Malt 750', short: 'JM SM 750' },
+];
+const COMP_PRODUCTS = [
+  { id: 'pj',    name: 'Prince Jon',         short: 'P.J' },
+  { id: 'lj',    name: 'Lord John',           short: 'L.J' },
+  { id: 'dsp',   name: 'DSP',                 short: 'DSP' },
+  { id: 'ib',    name: 'I.B',                 short: 'I.B' },
+  { id: 'rs180', name: 'Royal Stag 180 ML',   short: 'Royal Stag' },
+  { id: 'rspl',  name: 'Royals Special 180',  short: 'Royals Spl' },
+  { id: 'bp',    name: 'B.P',                 short: 'B.P' },
+  { id: 'mc180', name: 'McDowells 180 ML',    short: 'McDowell\'s' },
+  { id: 'kr',    name: 'Krimpis',             short: 'Krimpis' },
+];
+const ALL_PRODUCTS = [...OWN_PRODUCTS, ...COMP_PRODUCTS];
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const OWN_COLORS  = ['#e07b39','#f4a96a','#d45e1a','#f7c89b','#c8521a','#fad4ad'];
+const COMP_COLORS = ['#3ab87a','#6ddaa4','#2ea066','#a8e8c8','#1a8050','#5dcb8a','#4caf50','#9ee2c0','#25d0a0'];
+
+// ============================================================
+// LOCAL STORAGE
+// ============================================================
+function loadRecords() { try { return JSON.parse(localStorage.getItem('jm_sales_v2') || '[]'); } catch(e) { return []; } }
+function saveRecords(r) { localStorage.setItem('jm_sales_v2', JSON.stringify(r)); }
+
+let records = loadRecords();
+let selectedProducts = new Set();
+let charts = {};
+
+// ============================================================
+// PANEL SWITCH
+// ============================================================
+window.switchPanel = function(panel, btn, mode) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + panel).classList.add('active');
+  if (mode === 'mbn') {
+    document.querySelectorAll('.mbn-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('mbn-' + panel)?.classList.add('active');
+  } else {
+    document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+    btn?.classList.add('active');
+    // Sync mobile nav
+    document.querySelectorAll('.mbn-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('mbn-' + panel)?.classList.add('active');
+  }
+  // Also sync desktop tabs from mobile nav
+  if (mode === 'mbn') {
+    document.querySelectorAll('.nav-tab').forEach((b,i) => {
+      b.classList.toggle('active', (i===0 && panel==='dashboard')||(i===1 && panel==='admin'));
+    });
+  }
+  if (panel === 'dashboard') renderDashboard();
+  window.scrollTo(0,0);
+}
+
+// ============================================================
+// ADMIN AUTH
+// ============================================================
+window.adminLogin = function() {
+  const pw = document.getElementById('admin-password').value;
+  if (pw === 'ssd63') {
+    document.getElementById('admin-login').style.display = 'none';
+    document.getElementById('admin-content').classList.add('visible');
+    buildAdminForms();
+    setTodayDate();
+    renderAdminTable();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+window.adminLogout = function() {
+  document.getElementById('admin-login').style.display = '';
+  document.getElementById('admin-content').classList.remove('visible');
+  document.getElementById('admin-password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+}
+
+function setTodayDate() {
+  const t = new Date();
+  document.getElementById('entry-date').value = t.toISOString().split('T')[0];
+  document.getElementById('entry-month').value = t.getMonth() + 1;
+  document.getElementById('entry-year').value = t.getFullYear();
+}
+
+// ============================================================
+// BUILD ADMIN FORMS
+// ============================================================
+function buildAdminForms() {
+  document.getElementById('own-products-form').innerHTML = OWN_PRODUCTS.map(p =>
+    `<div class="product-entry">
+      <label>${p.name}</label>
+      <input type="number" class="qty-input" id="qty-${p.id}" placeholder="0" min="0" inputmode="numeric">
+    </div>`).join('');
+  document.getElementById('comp-products-form').innerHTML = COMP_PRODUCTS.map(p =>
+    `<div class="product-entry">
+      <label>${p.name}</label>
+      <input type="number" class="qty-input" id="qty-${p.id}" placeholder="0" min="0" inputmode="numeric">
+    </div>`).join('');
+}
+
+// ============================================================
+// SAVE ENTRY — clears form after save
+// ============================================================
+window.saveEntry = async function() {
+  const dateVal  = document.getElementById('entry-date').value;
+  const monthVal = parseInt(document.getElementById('entry-month').value);
+  const yearVal  = parseInt(document.getElementById('entry-year').value);
+  if (!dateVal) { alert('Please select a date.'); return; }
+
+  const newRows = [];
+  ALL_PRODUCTS.forEach(p => {
+    const input = document.getElementById('qty-' + p.id);
+    const qty = parseInt(input?.value || 0) || 0;
+    if (qty > 0) {
+      const isOwn = OWN_PRODUCTS.some(op => op.id === p.id);
+      newRows.push({ id: Date.now() + Math.random(), date: dateVal, month: monthVal, year: yearVal, productId: p.id, productName: p.name, type: isOwn ? 'own' : 'competitor', qty });
+    }
+  });
+
+  if (newRows.length === 0) { alert('Please enter at least one quantity.'); return; }
+
+  records.push(...newRows);
+  saveRecords(records);
+
+  if (useFirebase) {
+    try { for (const row of newRows) await addDoc(collection(db, 'sales'), row); } catch(e) {}
+  }
+
+  // Clear all qty inputs
+  ALL_PRODUCTS.forEach(p => { const i = document.getElementById('qty-' + p.id); if (i) i.value = ''; });
+
+  // Show success, refresh table
+  const msg = document.getElementById('success-msg');
+  msg.style.display = 'block';
+  setTimeout(() => msg.style.display = 'none', 3000);
+  renderAdminTable();
+  renderDashboard();
+
+  // Scroll to saved records section
+  setTimeout(() => {
+    document.getElementById('admin-no-data').closest('.table-card')?.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 300);
+}
+
+// ============================================================
+// DELETE
+// ============================================================
+window.deleteEntry = function(id) {
+  if (!confirm('Delete this record?')) return;
+  records = records.filter(r => r.id != id);
+  saveRecords(records);
+  renderAdminTable();
+  renderDashboard();
+}
+window.clearAllData = function() {
+  if (!confirm('Delete ALL records? This cannot be undone.')) return;
+  records = [];
+  saveRecords(records);
+  renderAdminTable();
+  renderDashboard();
+}
+
+// ============================================================
+// PIVOT TABLE BUILDER
+// ============================================================
+function buildPivotTable(filteredRecords, theadId, tbodyId, tfootId, showDelete) {
+  const thead = document.getElementById(theadId);
+  const tbody = document.getElementById(tbodyId);
+  const tfoot = document.getElementById(tfootId);
+
+  // Group by date
+  const dateMap = {};
+  filteredRecords.forEach(r => {
+    if (!dateMap[r.date]) dateMap[r.date] = {};
+    dateMap[r.date][r.productId] = (dateMap[r.date][r.productId] || 0) + r.qty;
+  });
+
+  const dates = Object.keys(dateMap).sort();
+
+  // Header — like screenshot: DATE | OWN products... | COMP products...
+  thead.innerHTML = `
+    <tr>
+      <th class="date-col" rowspan="2">DATE<br>2026</th>
+      ${OWN_PRODUCTS.map(p => `<th class="own-col">${p.name.toUpperCase().replace(' ML','<br>ML').replace(' PET','<br>PET')}</th>`).join('')}
+      ${COMP_PRODUCTS.map(p => `<th class="comp-col">${p.short.toUpperCase()}</th>`).join('')}
+      ${showDelete ? '<th style="min-width:60px;background:var(--surface2);">DEL</th>' : ''}
+    </tr>
+  `;
+
+  if (dates.length === 0) {
+    tbody.innerHTML = '';
+    tfoot.innerHTML = '';
+    return false;
+  }
+
+  // Totals
+  const totals = {};
+  ALL_PRODUCTS.forEach(p => totals[p.id] = 0);
+
+  tbody.innerHTML = dates.map(date => {
+    const row = dateMap[date];
+    const rowIds = filteredRecords.filter(r => r.date === date).map(r => r.id);
+    ALL_PRODUCTS.forEach(p => { totals[p.id] += (row[p.id] || 0); });
+    return `<tr>
+      <td class="date-cell">${date.slice(5)} <span class="month-pill">${MONTHS[parseInt(date.slice(5,7))-1]}</span></td>
+      ${OWN_PRODUCTS.map(p => `<td class="own-data ${(row[p.id]||0)===0?'zero':''}">${row[p.id] || '-'}</td>`).join('')}
+      ${COMP_PRODUCTS.map(p => `<td class="comp-data ${(row[p.id]||0)===0?'zero':''}">${row[p.id] || '-'}</td>`).join('')}
+      ${showDelete ? `<td><button class="btn btn-danger del-btn" onclick="deleteDateEntry('${date}')">✕</button></td>` : ''}
+    </tr>`;
+  }).join('');
+
+  // Footer totals
+  const ownGrand = OWN_PRODUCTS.reduce((s,p) => s + totals[p.id], 0);
+  const compGrand = COMP_PRODUCTS.reduce((s,p) => s + totals[p.id], 0);
+  tfoot.innerHTML = `
+    <tr>
+      <td class="date-cell" style="font-weight:700;">TOTAL</td>
+      ${OWN_PRODUCTS.map(p => `<td class="own-total" style="font-weight:700;">${totals[p.id] || '-'}</td>`).join('')}
+      ${COMP_PRODUCTS.map(p => `<td class="comp-total" style="font-weight:700;">${totals[p.id] || '-'}</td>`).join('')}
+      ${showDelete ? '<td></td>' : ''}
+    </tr>
+  `;
+  return true;
+}
+
+// Delete all entries for a specific date
+window.deleteDateEntry = function(date) {
+  if (!confirm(`Delete all records for ${date}?`)) return;
+  records = records.filter(r => r.date !== date);
+  saveRecords(records);
+  renderAdminTable();
+  renderDashboard();
+}
+
+// ============================================================
+// ADMIN TABLE
+// ============================================================
+window.renderAdminTable = function() {
+  const filterMonth = document.getElementById('admin-filter-month')?.value || 'all';
+  let filtered = records.filter(r => filterMonth === 'all' || r.month == filterMonth);
+  const hasData = buildPivotTable(filtered, 'admin-pivot-thead', 'admin-pivot-tbody', 'admin-pivot-tfoot', true);
+  document.getElementById('admin-no-data').style.display = hasData ? 'none' : 'block';
+  document.getElementById('admin-pivot-table').style.display = hasData ? '' : 'none';
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+window.renderDashboard = function() {
+  const year = parseInt(document.getElementById('dash-year').value) || 2026;
+  const monthSel = document.getElementById('dash-month').value;
+  let filtered = records.filter(r => r.year == year);
+  if (monthSel !== 'all') filtered = filtered.filter(r => r.month == monthSel);
+
+  renderStats(filtered);
+  renderTop5(filtered);
+  renderTrendChart(year);
+  renderPieChart(filtered);
+  renderCompareGrid(filtered);
+  renderPivotDash(filtered);
+}
+
+function getTotal(recs, type) { return recs.filter(r => type==='all'||r.type===type).reduce((s,r)=>s+r.qty,0); }
+function getProductTotal(recs, pid) { return recs.filter(r=>r.productId===pid).reduce((s,r)=>s+r.qty,0); }
+
+function renderStats(filtered) {
+  const ownTotal  = getTotal(filtered, 'own');
+  const compTotal = getTotal(filtered, 'competitor');
+  const bestOwn   = OWN_PRODUCTS.map(p=>({name:p.short,qty:getProductTotal(filtered,p.id)})).sort((a,b)=>b.qty-a.qty)[0] || {name:'-',qty:0};
+
+  // Best day
+  const dayMap = {};
+  filtered.forEach(r => { dayMap[r.date] = (dayMap[r.date]||0) + r.qty; });
+  const bestDay = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])[0];
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Own Brand Sales</div>
+      <div class="stat-value">${ownTotal.toLocaleString()}</div>
+      <div class="stat-sub">cases sold</div>
+      <span class="stat-badge badge-orange">John Martin</span>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Competitor Data</div>
+      <div class="stat-value">${compTotal.toLocaleString()}</div>
+      <div class="stat-sub">cases tracked</div>
+      <span class="stat-badge badge-green">Market</span>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Volume</div>
+      <div class="stat-value">${(ownTotal+compTotal).toLocaleString()}</div>
+      <div class="stat-sub">all products</div>
+      <span class="stat-badge badge-orange">Combined</span>
+    </div>
+    <div class="stat-card gold">
+      <div class="stat-label">Top Own Product</div>
+      <div class="stat-value" style="font-size:16px;line-height:1.2;">${bestOwn.name}</div>
+      <div class="stat-sub">${bestOwn.qty} cases</div>
+      <span class="stat-badge badge-gold">★ Best Seller</span>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Best Day</div>
+      <div class="stat-value" style="font-size:16px;line-height:1.2;">${bestDay ? bestDay[0].slice(5) : '-'}</div>
+      <div class="stat-sub">${bestDay ? bestDay[1]+' cases' : 'No data'}</div>
+      <span class="stat-badge badge-orange">Peak</span>
+    </div>
+  `;
+}
+
+function renderTop5(filtered) {
+  const allTotals = ALL_PRODUCTS.map(p => ({
+    id: p.id, name: p.name, short: p.short,
+    isOwn: OWN_PRODUCTS.some(op => op.id === p.id),
+    qty: getProductTotal(filtered, p.id)
+  })).sort((a,b) => b.qty - a.qty).slice(0, 5);
+
+  const maxQty = allTotals[0]?.qty || 1;
+
+  const rankColors = ['#f59e0b','#9ca3af','#cd7c3e','#6b7280','#6b7280'];
+
+  document.getElementById('top5-list').innerHTML = allTotals.map((p, i) => {
+    const pct = maxQty > 0 ? Math.round(p.qty / maxQty * 100) : 0;
+    const fillColor = p.isOwn ? 'var(--primary)' : 'var(--green)';
+    const tagHtml = p.isOwn
+      ? `<span class="tag-own">Own</span>`
+      : `<span class="tag-comp">Comp</span>`;
+    return `<div class="top5-item">
+      <div class="top5-rank rank-${i+1}" style="color:${rankColors[i]}">${i+1}</div>
+      <div class="top5-bar-wrap">
+        <div class="top5-name">
+          <span>${p.name}</span>
+          ${tagHtml}
+        </div>
+        <div class="top5-bar-bg">
+          <div class="top5-bar-fill" style="width:${pct}%;background:${fillColor}"></div>
+        </div>
+        <div class="top5-qty">${p.qty.toLocaleString()} cases</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (allTotals.every(p => p.qty === 0)) {
+    document.getElementById('top5-list').innerHTML = '<div class="no-data" style="padding:20px;">No sales data for this period.</div>';
+  }
+}
+
+function renderTrendChart(year) {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  if (charts.trend) charts.trend.destroy();
+  const ownByMonth  = MONTHS.map((_,i) => records.filter(r=>r.year==year&&r.month==i+1&&r.type==='own').reduce((s,r)=>s+r.qty,0));
+  const compByMonth = MONTHS.map((_,i) => records.filter(r=>r.year==year&&r.month==i+1&&r.type==='competitor').reduce((s,r)=>s+r.qty,0));
+  charts.trend = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: MONTHS, datasets: [
+      { label: 'John Martin (Own)', data: ownByMonth, backgroundColor: 'rgba(224,123,57,0.85)', borderRadius: 5, borderSkipped: false },
+      { label: 'Competitors', data: compByMonth, backgroundColor: 'rgba(58,184,122,0.7)', borderRadius: 5, borderSkipped: false }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins: { legend: { position:'bottom', labels: { font:{family:'DM Sans',size:11}, padding:12, boxWidth:12 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} cases` } } },
+      scales: {
+        x: { grid:{display:false}, ticks:{font:{family:'DM Sans',size:11}} },
+        y: { grid:{color:'#f0ece6'}, ticks:{font:{family:'DM Sans',size:11}}, beginAtZero:true }
+      }
+    }
+  });
+}
+
+function renderPieChart(filtered) {
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  if (charts.pie) charts.pie.destroy();
+  const ownData = OWN_PRODUCTS.map(p => getProductTotal(filtered, p.id));
+  const hasData = ownData.some(v=>v>0);
+  charts.pie = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: OWN_PRODUCTS.map(p=>p.short), datasets: [{
+      data: hasData ? ownData : [1,1,1,1,1,1],
+      backgroundColor: hasData ? OWN_COLORS : OWN_COLORS.map(c=>c+'44'),
+      borderWidth: 2, borderColor:'#fff', hoverOffset:6
+    }]},
+    options: { responsive:true, maintainAspectRatio:false, cutout:'60%',
+      plugins: {
+        legend: { position:'bottom', labels:{font:{family:'DM Sans',size:10},padding:8,boxWidth:10} },
+        tooltip: { callbacks: { label: ctx => hasData ? ` ${ctx.label}: ${ctx.parsed} cases` : ' No data yet' } }
+      }
+    }
+  });
+}
+
+// ============================================================
+// COMPARE
+// ============================================================
+window.renderCompareGrid = function(filtered) {
+  let html = '';
+  OWN_PRODUCTS.forEach(p => {
+    const total = getProductTotal(filtered, p.id);
+    const sel = selectedProducts.has(p.id);
+    html += `<div class="product-card ${sel?'selected':''}" onclick="toggleProduct('${p.id}')">
+      <div class="pc-brand own">● Own Brand</div>
+      <div class="pc-name">${p.name}</div>
+      <div class="pc-total">${total.toLocaleString()} <span class="pc-unit">cases</span></div>
+    </div>`;
+  });
+  COMP_PRODUCTS.forEach(p => {
+    const total = getProductTotal(filtered, p.id);
+    const sel = selectedProducts.has(p.id);
+    html += `<div class="product-card competitor ${sel?'selected':''}" onclick="toggleProduct('${p.id}')">
+      <div class="pc-brand comp">● Competitor</div>
+      <div class="pc-name">${p.name}</div>
+      <div class="pc-total">${total.toLocaleString()} <span class="pc-unit">cases</span></div>
+    </div>`;
+  });
+  document.getElementById('compare-grid').innerHTML = html;
+  renderCompareChart(filtered);
+}
+
+window.toggleProduct = function(pid) {
+  selectedProducts.has(pid) ? selectedProducts.delete(pid) : selectedProducts.add(pid);
+  const filtered = getFilteredRecords();
+  renderCompareGrid(filtered);
+}
+window.selectAll = function(type) {
+  (type==='own'?OWN_PRODUCTS:COMP_PRODUCTS).forEach(p=>selectedProducts.add(p.id));
+  renderCompareGrid(getFilteredRecords());
+}
+window.clearSelection = function() {
+  selectedProducts.clear();
+  renderCompareGrid(getFilteredRecords());
+}
+
+function getFilteredRecords() {
+  const year = parseInt(document.getElementById('dash-year').value)||2026;
+  const monthSel = document.getElementById('dash-month').value;
+  let filtered = records.filter(r=>r.year==year);
+  if (monthSel!=='all') filtered=filtered.filter(r=>r.month==monthSel);
+  return filtered;
+}
+
+function renderCompareChart(filtered) {
+  const wrap = document.getElementById('compare-chart-wrap');
+  if (selectedProducts.size===0){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  const ctx = document.getElementById('compareChart').getContext('2d');
+  if (charts.compare) charts.compare.destroy();
+  const sel = ALL_PRODUCTS.filter(p=>selectedProducts.has(p.id));
+  const year = parseInt(document.getElementById('dash-year').value)||2026;
+  const monthSel = document.getElementById('dash-month').value;
+  let labels, datasets;
+  if (monthSel!=='all') {
+    labels = sel.map(p=>p.short);
+    const values = sel.map(p=>getProductTotal(filtered,p.id));
+    const colors = sel.map(p=>OWN_PRODUCTS.some(op=>op.id===p.id)?'#e07b39':'#3ab87a');
+    datasets=[{label:'Cases',data:values,backgroundColor:colors,borderRadius:5}];
+    document.getElementById('compare-chart-title').textContent='Comparison — '+MONTH_FULL[parseInt(monthSel)-1];
+  } else {
+    labels=MONTHS;
+    datasets=sel.map(p=>{
+      const isOwn=OWN_PRODUCTS.some(op=>op.id===p.id);
+      const color=isOwn?OWN_COLORS[OWN_PRODUCTS.findIndex(op=>op.id===p.id)]:COMP_COLORS[COMP_PRODUCTS.findIndex(cp=>cp.id===p.id)];
+      const data=MONTHS.map((_,mi)=>records.filter(r=>r.year==year&&r.month==mi+1&&r.productId===p.id).reduce((s,r)=>s+r.qty,0));
+      return {label:p.short,data,borderColor:color,backgroundColor:color+'20',fill:false,tension:0.3,pointRadius:3,borderWidth:2};
+    });
+    document.getElementById('compare-chart-title').textContent='Monthly Trend Comparison';
+  }
+  charts.compare=new Chart(ctx,{
+    type:monthSel!=='all'?'bar':'line',
+    data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{family:'DM Sans',size:11},padding:12}}},
+      scales:{x:{grid:{display:false},ticks:{font:{family:'DM Sans',size:10}}},y:{grid:{color:'#f0ece6'},ticks:{font:{family:'DM Sans',size:10}},beginAtZero:true}}
+    }
+  });
+}
+
+function renderPivotDash(filtered) {
+  const hasData = buildPivotTable(filtered,'pivot-thead','pivot-tbody','pivot-tfoot',false);
+  document.getElementById('dash-no-data').style.display = hasData ? 'none' : 'block';
+  document.getElementById('pivot-table').style.display = hasData ? '' : 'none';
+}
+
+// ============================================================
+// EXPORT EXCEL
+// ============================================================
+window.exportExcel = function() {
+  const year = parseInt(document.getElementById('dash-year').value)||2026;
+  const monthSel = document.getElementById('dash-month').value;
+  let filtered = records.filter(r=>r.year==year);
+  if (monthSel!=='all') filtered=filtered.filter(r=>r.month==monthSel);
+  exportToExcel(filtered, `SalesReport_${year}_${monthSel==='all'?'AllMonths':MONTH_FULL[parseInt(monthSel)-1]}.xlsx`);
+}
+window.exportAdminExcel = function() {
+  const filterMonth = document.getElementById('admin-filter-month')?.value||'all';
+  let filtered = records.filter(r=>filterMonth==='all'||r.month==filterMonth);
+  exportToExcel(filtered, `AdminRecords_${filterMonth==='all'?'All':MONTH_FULL[parseInt(filterMonth)-1]}.xlsx`);
+}
+
+function exportToExcel(filtered, filename) {
+  if (!window.XLSX) { alert('Excel library not loaded yet.'); return; }
+  if (filtered.length===0) { alert('No data to export.'); return; }
+
+  // Build pivot data
+  const dateMap = {};
+  filtered.forEach(r => {
+    if (!dateMap[r.date]) dateMap[r.date]={};
+    dateMap[r.date][r.productId]=(dateMap[r.date][r.productId]||0)+r.qty;
+  });
+  const dates = Object.keys(dateMap).sort();
+
+  // Header row
+  const header = ['Date', ...OWN_PRODUCTS.map(p=>p.name), ...COMP_PRODUCTS.map(p=>p.name)];
+  const rows = [header];
+
+  dates.forEach(date => {
+    const row = dateMap[date];
+    rows.push([date, ...OWN_PRODUCTS.map(p=>row[p.id]||0), ...COMP_PRODUCTS.map(p=>row[p.id]||0)]);
+  });
+
+  // Total row
+  const totals = ['TOTAL'];
+  ALL_PRODUCTS.forEach(p => {
+    totals.push(filtered.filter(r=>r.productId===p.id).reduce((s,r)=>s+r.qty,0));
+  });
+  rows.push(totals);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales Report');
+  XLSX.writeFile(wb, filename);
+}
+
+// Init
+renderDashboard();
+</script>
+</body>
+</html>
