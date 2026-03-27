@@ -744,15 +744,62 @@ window.saveEntry = async function() {
 // ============================================================
 // DELETE
 // ============================================================
-window.deleteEntry = function(id) {
+window.deleteEntry = async function(id) {
   if (!confirm('Delete this record?')) return;
+  // Delete from Firebase first
+  if (useFirebase) {
+    try {
+      const snap = await getDocs(collection(db, 'sales'));
+      for (const d of snap.docs) {
+        if (String(d.data().id) === String(id)) {
+          await deleteDoc(doc(db, 'sales', d.id));
+          break;
+        }
+      }
+    } catch(e) {}
+  }
   records = records.filter(r => r.id != id);
   saveRecords(records);
   renderAdminTable();
   renderDashboard();
 }
-window.clearAllData = function() {
-  if (!confirm('Delete ALL records? This cannot be undone.')) return;
+
+window.deleteDateEntry = async function(date) {
+  if (!confirm(`Delete all records for ${date}?`)) return;
+  // Delete from Firebase
+  if (useFirebase) {
+    try {
+      const snap = await getDocs(collection(db, 'sales'));
+      for (const d of snap.docs) {
+        if (d.data().date === date) {
+          await deleteDoc(doc(db, 'sales', d.id));
+        }
+      }
+    } catch(e) {}
+  }
+  records = records.filter(r => r.date !== date);
+  saveRecords(records);
+  renderAdminTable();
+  renderDashboard();
+}
+
+window.clearAllData = async function() {
+  const pw = prompt('Enter admin password to delete ALL records:');
+  if (pw === null) return; // cancelled
+  if (pw !== 'ssd63') {
+    alert('❌ Incorrect password. Cannot clear data.');
+    return;
+  }
+  if (!confirm('⚠️ This will permanently delete ALL records. Are you sure?')) return;
+  // Delete all from Firebase
+  if (useFirebase) {
+    try {
+      const snap = await getDocs(collection(db, 'sales'));
+      for (const d of snap.docs) {
+        await deleteDoc(doc(db, 'sales', d.id));
+      }
+    } catch(e) {}
+  }
   records = [];
   saveRecords(records);
   renderAdminTable();
@@ -822,14 +869,7 @@ function buildPivotTable(filteredRecords, theadId, tbodyId, tfootId, showDelete)
   return true;
 }
 
-// Delete all entries for a specific date
-window.deleteDateEntry = function(date) {
-  if (!confirm(`Delete all records for ${date}?`)) return;
-  records = records.filter(r => r.date !== date);
-  saveRecords(records);
-  renderAdminTable();
-  renderDashboard();
-}
+// (deleteDateEntry is defined in the DELETE section above)
 
 // ============================================================
 // ADMIN TABLE
