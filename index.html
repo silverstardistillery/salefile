@@ -602,7 +602,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 <!-- ======== SCRIPTS ======== -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy }
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ============================================================
@@ -665,24 +665,30 @@ let selectedProducts = new Set();
 let charts = {};
 
 // ============================================================
-// FIREBASE LOAD — sync all records from Firebase at startup
+// REAL-TIME FIREBASE LISTENER — syncs all devices instantly
+// Any add/delete/edit on any device updates every other device live
 // ============================================================
-async function loadFromFirebase() {
+function startRealtimeSync() {
   if (!useFirebase) return;
   try {
-    const snap = await getDocs(query(collection(db, 'sales'), orderBy('date')));
-    if (!snap.empty) {
+    const q = query(collection(db, 'sales'), orderBy('date'));
+    onSnapshot(q, (snap) => {
+      // Rebuild records array from the live Firestore snapshot
       records = snap.docs.map(d => d.data());
-      saveRecords(records); // update local cache
+      saveRecords(records); // keep local cache in sync
       renderDashboard();
-      // if admin is open, refresh table too
+      // Also refresh admin table if admin panel is open
       if (document.getElementById('admin-content').classList.contains('visible')) {
         renderAdminTable();
       }
-    }
-  } catch(e) { console.warn('Firebase load failed, using localStorage', e); }
+    }, (err) => {
+      console.warn('Realtime sync error, falling back to localStorage', err);
+    });
+  } catch(e) {
+    console.warn('Could not start realtime sync', e);
+  }
 }
-loadFromFirebase();
+startRealtimeSync();
 
 // ============================================================
 // PANEL SWITCH
@@ -824,7 +830,7 @@ window.deleteEntry = async function(id) {
 
 window.deleteDateEntry = async function(date) {
   if (!confirm(`Delete all records for ${date}?`)) return;
-  // Delete from Firebase
+  // Delete from Firebase — onSnapshot will auto-update all devices
   if (useFirebase) {
     try {
       const snap = await getDocs(collection(db, 'sales'));
@@ -833,35 +839,37 @@ window.deleteDateEntry = async function(date) {
           await deleteDoc(doc(db, 'sales', d.id));
         }
       }
-    } catch(e) {}
+    } catch(e) {
+      // Firebase failed — fall back to local-only delete
+      records = records.filter(r => r.date !== date);
+      saveRecords(records);
+      renderAdminTable();
+      renderDashboard();
+    }
+  } else {
+    records = records.filter(r => r.date !== date);
+    saveRecords(records);
+    renderAdminTable();
+    renderDashboard();
   }
-  records = records.filter(r => r.date !== date);
-  saveRecords(records);
-  renderAdminTable();
-  renderDashboard();
 }
 
 window.clearAllData = async function() {
   const pw = prompt('Enter admin password to delete ALL records:');
-  if (pw === null) return; // cancelled
-  if (pw !== 'ssd63') {
-    alert('❌ Incorrect password. Cannot clear data.');
-    return;
-  }
+  if (pw === null) return;
+  if (pw !== 'ssd63') { alert('❌ Incorrect password. Cannot clear data.'); return; }
   if (!confirm('⚠️ This will permanently delete ALL records. Are you sure?')) return;
-  // Delete all from Firebase
   if (useFirebase) {
     try {
       const snap = await getDocs(collection(db, 'sales'));
-      for (const d of snap.docs) {
-        await deleteDoc(doc(db, 'sales', d.id));
-      }
-    } catch(e) {}
+      for (const d of snap.docs) { await deleteDoc(doc(db, 'sales', d.id)); }
+      // onSnapshot will fire and update all devices automatically
+    } catch(e) {
+      records = []; saveRecords(records); renderAdminTable(); renderDashboard();
+    }
+  } else {
+    records = []; saveRecords(records); renderAdminTable(); renderDashboard();
   }
-  records = [];
-  saveRecords(records);
-  renderAdminTable();
-  renderDashboard();
 }
 
 // ============================================================
