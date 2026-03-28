@@ -311,6 +311,23 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 /* ========== NO DATA ========== */
 .no-data { text-align: center; padding: 32px 16px; color: var(--text-muted); font-size: 14px; }
 
+/* ========== EDIT MODAL ========== */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 999;
+  background: rgba(44,36,22,0.45); align-items: center; justify-content: center; padding: 16px;
+}
+.modal-overlay.open { display: flex; }
+.modal-card {
+  background: var(--surface); border-radius: var(--radius); padding: 22px 20px;
+  box-shadow: var(--shadow-lg); width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+}
+.modal-title { font-family: 'Playfair Display', serif; font-size: 18px; margin-bottom: 4px; }
+.modal-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 18px; }
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.modal-footer { display: flex; gap: 10px; justify-content: flex-end; }
+.edit-btn { padding: 4px 10px; font-size: 11px; min-height: 28px; background: var(--blue-light); color: var(--blue); border: 1.5px solid #c0d6f7; border-radius: 6px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+.edit-btn:hover { background: var(--blue); color: white; }
+
 /* ========== MOBILE BOTTOM NAV ========== */
 .mobile-bottom-nav {
   display: flex; position: fixed; bottom: 0; left: 0; right: 0;
@@ -382,6 +399,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <option value="9">September</option><option value="10">October</option>
         <option value="11">November</option><option value="12">December</option>
       </select>
+      <script>
+        // Set default month to current month immediately
+        (function() {
+          var sel = document.getElementById('dash-month');
+          if (sel) sel.value = new Date().getMonth() + 1;
+        })();
+      </script>
       <button class="btn btn-excel" onclick="exportExcel()" title="Export to Excel">📥 Excel</button>
     </div>
   </div>
@@ -561,6 +585,20 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   </div>
 </div>
 
+<!-- ======== EDIT MODAL ======== -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal-card">
+    <div class="modal-title">✏️ Edit Sales Entry</div>
+    <div class="modal-sub" id="edit-modal-sub">Editing entry for <span id="edit-date-label"></span></div>
+    <input type="hidden" id="edit-date-val">
+    <div id="edit-products-grid" class="modal-grid"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-success" onclick="saveEditEntry()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ======== SCRIPTS ======== -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -617,14 +655,34 @@ const OWN_COLORS  = ['#e07b39','#f4a96a','#d45e1a','#f7c89b','#c8521a','#fad4ad'
 const COMP_COLORS = ['#3ab87a','#6ddaa4','#2ea066','#a8e8c8','#1a8050','#5dcb8a','#4caf50','#9ee2c0','#25d0a0'];
 
 // ============================================================
-// LOCAL STORAGE
+// LOCAL STORAGE (fallback only)
 // ============================================================
 function loadRecords() { try { return JSON.parse(localStorage.getItem('jm_sales_v2') || '[]'); } catch(e) { return []; } }
 function saveRecords(r) { localStorage.setItem('jm_sales_v2', JSON.stringify(r)); }
 
-let records = loadRecords();
+let records = loadRecords(); // temporary until Firebase loads
 let selectedProducts = new Set();
 let charts = {};
+
+// ============================================================
+// FIREBASE LOAD — sync all records from Firebase at startup
+// ============================================================
+async function loadFromFirebase() {
+  if (!useFirebase) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'sales'), orderBy('date')));
+    if (!snap.empty) {
+      records = snap.docs.map(d => d.data());
+      saveRecords(records); // update local cache
+      renderDashboard();
+      // if admin is open, refresh table too
+      if (document.getElementById('admin-content').classList.contains('visible')) {
+        renderAdminTable();
+      }
+    }
+  } catch(e) { console.warn('Firebase load failed, using localStorage', e); }
+}
+loadFromFirebase();
 
 // ============================================================
 // PANEL SWITCH
@@ -829,7 +887,7 @@ function buildPivotTable(filteredRecords, theadId, tbodyId, tfootId, showDelete)
       <th class="date-col" rowspan="2">DATE<br>2026</th>
       ${OWN_PRODUCTS.map(p => `<th class="own-col">${p.name.toUpperCase().replace(' ML','<br>ML').replace(' PET','<br>PET')}</th>`).join('')}
       ${COMP_PRODUCTS.map(p => `<th class="comp-col">${p.short.toUpperCase()}</th>`).join('')}
-      ${showDelete ? '<th style="min-width:60px;background:var(--surface2);">DEL</th>' : ''}
+      ${showDelete ? '<th style="min-width:80px;background:var(--surface2);">ACTIONS</th>' : ''}
     </tr>
   `;
 
@@ -851,7 +909,7 @@ function buildPivotTable(filteredRecords, theadId, tbodyId, tfootId, showDelete)
       <td class="date-cell">${date.slice(5)} <span class="month-pill">${MONTHS[parseInt(date.slice(5,7))-1]}</span></td>
       ${OWN_PRODUCTS.map(p => `<td class="own-data ${(row[p.id]||0)===0?'zero':''}">${row[p.id] || '-'}</td>`).join('')}
       ${COMP_PRODUCTS.map(p => `<td class="comp-data ${(row[p.id]||0)===0?'zero':''}">${row[p.id] || '-'}</td>`).join('')}
-      ${showDelete ? `<td><button class="btn btn-danger del-btn" onclick="deleteDateEntry('${date}')">✕</button></td>` : ''}
+      ${showDelete ? `<td style="white-space:nowrap;"><button class="edit-btn" onclick="openEditModal('${date}')">✏️</button> <button class="btn btn-danger del-btn" onclick="deleteDateEntry('${date}')">✕</button></td>` : ''}
     </tr>`;
   }).join('');
 
@@ -1168,7 +1226,102 @@ function exportToExcel(filtered, filename) {
 }
 
 // Init
+document.getElementById('dash-month').value = new Date().getMonth() + 1;
 renderDashboard();
+
+// ============================================================
+// EDIT ENTRY MODAL
+// ============================================================
+window.openEditModal = function(date) {
+  const dateRecords = records.filter(r => r.date === date);
+  const dateMap = {};
+  dateRecords.forEach(r => { dateMap[r.productId] = r.qty; });
+
+  document.getElementById('edit-date-val').value = date;
+  document.getElementById('edit-date-label').textContent = date;
+
+  let html = '';
+  ALL_PRODUCTS.forEach(p => {
+    const isOwn = OWN_PRODUCTS.some(op => op.id === p.id);
+    html += `<div style="display:flex;flex-direction:column;gap:4px;">
+      <label style="font-size:11px;font-weight:600;color:${isOwn ? 'var(--primary)' : 'var(--green)'};text-transform:uppercase;letter-spacing:0.4px;">${p.short}</label>
+      <input type="number" class="qty-input" id="edit-qty-${p.id}" value="${dateMap[p.id] || 0}" min="0" inputmode="numeric" style="width:100%;">
+    </div>`;
+  });
+
+  document.getElementById('edit-products-grid').innerHTML = html;
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+window.closeEditModal = function() {
+  document.getElementById('edit-modal').classList.remove('open');
+}
+
+window.saveEditEntry = async function() {
+  const date = document.getElementById('edit-date-val').value;
+  if (!date) return;
+
+  const dateStr = date;
+  const parts = date.split('-');
+  const monthVal = parseInt(parts[1]);
+  const yearVal = parseInt(parts[0]);
+
+  // Build new rows from form
+  const newRows = [];
+  ALL_PRODUCTS.forEach(p => {
+    const input = document.getElementById('edit-qty-' + p.id);
+    const qty = parseInt(input?.value || 0) || 0;
+    if (qty > 0) {
+      const isOwn = OWN_PRODUCTS.some(op => op.id === p.id);
+      newRows.push({
+        id: Date.now() + Math.random(),
+        date: dateStr, month: monthVal, year: yearVal,
+        productId: p.id, productName: p.name,
+        type: isOwn ? 'own' : 'competitor', qty
+      });
+    }
+  });
+
+  // Delete old records for this date from Firebase
+  if (useFirebase) {
+    try {
+      const snap = await getDocs(collection(db, 'sales'));
+      for (const d of snap.docs) {
+        if (d.data().date === dateStr) {
+          await deleteDoc(doc(db, 'sales', d.id));
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Remove from local records
+  records = records.filter(r => r.date !== dateStr);
+
+  // Add new rows
+  records.push(...newRows);
+  saveRecords(records);
+
+  // Save to Firebase
+  if (useFirebase && newRows.length > 0) {
+    try {
+      for (const row of newRows) await addDoc(collection(db, 'sales'), row);
+    } catch(e) {}
+  }
+
+  closeEditModal();
+  renderAdminTable();
+  renderDashboard();
+
+  const msg = document.getElementById('success-msg');
+  msg.textContent = '✅ Entry updated successfully!';
+  msg.style.display = 'block';
+  setTimeout(() => { msg.style.display = 'none'; msg.textContent = '✅ Entry saved! Form cleared for new entry.'; }, 3000);
+}
+
+// Close modal on overlay click
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
 </script>
 </body>
 </html>
