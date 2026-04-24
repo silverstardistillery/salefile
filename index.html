@@ -2281,7 +2281,7 @@
     // ALL MONTHS — OWN BRAND TOTAL SALES COMPARISON CHART
     // Grouped bar chart: X = months, each group bar = one own product
     // Legend (right), X/Y axis titles, major gridlines, drop lines
-    // OWN products ONLY — no competitor data
+    // OWN products ONLY — no competitor data whatsoever
     // ============================================================
     function renderPrevMonthChart() {
       const year = parseInt(document.getElementById('dash-year').value) || new Date().getFullYear();
@@ -2289,12 +2289,21 @@
       // X-axis labels = all 12 months
       const monthLabels = MONTHS; // ['Jan','Feb',...,'Dec']
 
-      // For each own product, compute total per month across the selected year
-      // Each dataset = one own product, data = [total for Jan, Feb, ..., Dec]
+      // Build a Set of own product IDs for fast, strict lookup
+      const OWN_IDS = new Set(OWN_PRODUCTS.map(p => p.id));
+
+      // For each OWN product ONLY, compute total per month across the selected year.
+      // Competitor products are completely excluded — filtered by both productId AND type === 'own'.
       const datasets = OWN_PRODUCTS.map((p, i) => {
         const monthTotals = MONTHS.map((_, mi) =>
           records
-            .filter(r => r.year == year && r.month == mi + 1 && r.productId === p.id && r.type === 'own')
+            .filter(r =>
+              r.year == year &&
+              r.month == mi + 1 &&
+              r.productId === p.id &&
+              OWN_IDS.has(r.productId) &&  // must be an own brand product ID
+              r.type === 'own'              // must be tagged as own type
+            )
             .reduce((s, r) => s + r.qty, 0)
         );
         return {
@@ -2308,9 +2317,9 @@
         };
       });
 
-      // Grand total of own products for this year
+      // Grand total: strictly own brand product IDs AND type === 'own' — no competitor data
       const yearTotal = records
-        .filter(r => r.year == year && r.type === 'own')
+        .filter(r => r.year == year && OWN_IDS.has(r.productId) && r.type === 'own')
         .reduce((s, r) => s + r.qty, 0);
 
       document.getElementById('prev-month-title').textContent =
