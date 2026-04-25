@@ -1396,19 +1396,6 @@
       margin-top: 10px;
       text-align: center;
     }
-
-    /* Firebase status dot */
-    #fb-status {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #f0a500;
-      flex-shrink: 0;
-      margin-left: 8px;
-      transition: background 0.4s;
-      cursor: default;
-      box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
-    }
   </style>
 </head>
 
@@ -1426,7 +1413,6 @@
     <div class="nav-tabs" id="desktop-tabs">
       <button class="nav-tab active" onclick="switchPanel('dashboard',this)">📊 Dashboard</button>
       <button class="nav-tab" onclick="switchPanel('admin',this)">⚙️ Admin</button>
-      <div id="fb-status" title="Connecting to Firebase…"></div>
     </div>
   </nav>
 
@@ -1717,24 +1703,11 @@
     // ============================================================
 
     let db, useFirebase = false;
-    // Firebase status indicator helpers
-    function setFbStatus(status, msg) {
-      const el = document.getElementById('fb-status');
-      if (!el) return;
-      const colors = { connecting: '#f0a500', ok: '#3ab87a', error: '#e05252', offline: '#8a7d6b' };
-      el.style.background = colors[status] || '#ccc';
-      el.title = msg;
-    }
     try {
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       useFirebase = true;
-      setFbStatus('connecting', 'Connecting to Firebase…');
-    } catch (e) {
-      useFirebase = false;
-      setFbStatus('error', 'Firebase init failed: ' + e.message);
-      console.error('Firebase init failed:', e);
-    }
+    } catch (e) { useFirebase = false; }
 
     // ============================================================
     // DATA
@@ -1780,29 +1753,23 @@
     // Any add/delete/edit on any device updates every other device live
     // ============================================================
     function startRealtimeSync() {
-      if (!useFirebase) {
-        setFbStatus('offline', 'Firebase not available — using local storage only');
-        return;
-      }
+      if (!useFirebase) return;
       try {
         const q = query(collection(db, 'sales'), orderBy('date'));
         onSnapshot(q, (snap) => {
           // Rebuild records array from the live Firestore snapshot
           records = snap.docs.map(d => d.data());
           saveRecords(records); // keep local cache in sync
-          setFbStatus('ok', `Firebase connected ✓ — ${records.length} records loaded`);
           renderDashboard();
           // Also refresh admin table if admin panel is open
           if (document.getElementById('admin-content').classList.contains('visible')) {
             renderAdminTable();
           }
         }, (err) => {
-          setFbStatus('error', 'Firebase sync error: ' + err.message);
-          console.error('Realtime sync error, falling back to localStorage', err);
+          console.warn('Realtime sync error, falling back to localStorage', err);
         });
       } catch (e) {
-        setFbStatus('error', 'Could not start sync: ' + e.message);
-        console.error('Could not start realtime sync', e);
+        console.warn('Could not start realtime sync', e);
       }
     }
     startRealtimeSync();
@@ -1903,14 +1870,7 @@
       saveRecords(records);
 
       if (useFirebase) {
-        try {
-          for (const row of newRows) await addDoc(collection(db, 'sales'), row);
-          setFbStatus('ok', `Firebase connected ✓ — data saved`);
-        } catch (e) {
-          setFbStatus('error', 'Firebase save failed: ' + e.message);
-          console.error('Firebase save failed:', e);
-          alert('⚠️ Data saved locally but could NOT be saved to the cloud (Firebase).\nError: ' + e.message + '\n\nPlease check your internet connection and Firebase security rules.');
-        }
+        try { for (const row of newRows) await addDoc(collection(db, 'sales'), row); } catch (e) { }
       }
 
       // Clear all qty inputs
@@ -2522,8 +2482,8 @@
       XLSX.writeFile(wb, filename);
     }
 
-    // Init — default to 'all months' so previous months are always visible
-    document.getElementById('dash-month').value = 'all';
+    // Init
+    document.getElementById('dash-month').value = new Date().getMonth() + 1;
     renderDashboard();
 
     // ============================================================
